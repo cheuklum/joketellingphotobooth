@@ -52,6 +52,12 @@ _last_capture_time = 0.0
 _stable_count = 0
 _STABLE_FRAMES_REQUIRED = 5   # how many consecutive matching frames before it counts as "held"
 
+# one-shot trigger: fire once per gesture appearance, re-arm only after the
+# gesture has been absent for _REARM_FRAMES consecutive frames
+_armed = True
+_gone_count = 0
+_REARM_FRAMES = 15
+
 
 def _library_path():
 	return os.path.join(project.folder, 'gestures', 'gesture_library.json')
@@ -198,31 +204,46 @@ def onCook(scriptOp):
 	label, dist = _classify(vector, threshold)
 
 	if scriptOp.par.Detectenable.eval():
+		global _armed, _gone_count
 		now = time.time()
-		if label is not None and label == _last_label:
-			_stable_count += 1
+		if label is not None:
+			_gone_count = 0
+			_stable_count = _stable_count + 1 if label == _last_label else 0
 		else:
 			_stable_count = 0
+			_gone_count += 1
+			if _gone_count >= _REARM_FRAMES:
+				_armed = True
 		_last_label = label
 
-		if (label is not None
+		if (_armed
+				and label is not None
 				and _stable_count >= _STABLE_FRAMES_REQUIRED
 				and (now - _last_capture_time) >= scriptOp.par.Cooldown.eval()):
 			folder = _captures_dir(scriptOp)
 			ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
 			filename = os.path.join(folder, f"{label}_{ts}.jpg")
-			# save the clean (un-annotated) frame, not the landmark overlay
-			clean = cv2.flip((frame[:, :, :3] * 255).astype(np.uint8), 0)
+			# if a second input is wired, save that (e.g. a stylized/composited feed);
+			# otherwise save the clean (un-annotated) camera frame
+			save_frame = frame
+			if len(scriptOp.inputs) > 1 and scriptOp.inputs[1] is not None:
+				alt = scriptOp.inputs[1].numpyArray(delayed=False)
+				if alt is not None:
+					save_frame = alt
+			clean = cv2.flip((save_frame[:, :, :3] * 255).astype(np.uint8), 0)
 			clean_bgr = cv2.cvtColor(clean, cv2.COLOR_RGB2BGR)
 			cv2.imwrite(filename, clean_bgr)
 			_last_capture_time = now
 			_stable_count = 0
+			_armed = False
 			print(f"[gesture] detected '{label}' (dist={dist:.3f}) -> saved {filename}")
 
 	if not _library:
 		text, color = "library empty - capture samples first", (0, 0, 255)
 	elif vector is None:
 		text, color = "no hand detected", (0, 0, 255)
+	elif label is not None and not _armed:
+		text, color = f"{label} - photo taken, remove hand to re-arm", (255, 200, 0)
 	elif label is not None:
 		text, color = f"{label} ({dist:.2f})", (0, 255, 0)
 	else:
