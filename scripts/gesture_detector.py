@@ -25,7 +25,6 @@ Setup (one time):
         import sys; print(sys.executable)
         <that python path> -m pip install mediapipe opencv-python
 """
-
 import json
 import os
 import time
@@ -220,23 +219,33 @@ def onCook(scriptOp):
 				and label is not None
 				and _stable_count >= _STABLE_FRAMES_REQUIRED
 				and (now - _last_capture_time) >= scriptOp.par.Cooldown.eval()):
-			folder = _captures_dir(scriptOp)
-			ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-			filename = os.path.join(folder, f"{label}_{ts}.jpg")
-			# if a second input is wired, save that (e.g. a stylized/composited feed);
-			# otherwise save the clean (un-annotated) camera frame
-			save_frame = frame
-			if len(scriptOp.inputs) > 1 and scriptOp.inputs[1] is not None:
-				alt = scriptOp.inputs[1].numpyArray(delayed=False)
-				if alt is not None:
-					save_frame = alt
-			clean = cv2.flip((save_frame[:, :, :3] * 255).astype(np.uint8), 0)
-			clean_bgr = cv2.cvtColor(clean, cv2.COLOR_RGB2BGR)
-			cv2.imwrite(filename, clean_bgr)
+			
+			# folder = _captures_dir(scriptOp)
+			# ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+			# filename = os.path.join(folder, f"{label}_{ts}.jpg")
+			# # if a second input is wired, save that (e.g. a stylized/composited feed);
+			# # otherwise save the clean (un-annotated) camera frame
+			# save_frame = frame
+			# if len(scriptOp.inputs) > 1 and scriptOp.inputs[1] is not None:
+			# 	alt = scriptOp.inputs[1].numpyArray(delayed=False)
+			# 	if alt is not None:
+			# 		save_frame = alt
+			# clean = cv2.flip((save_frame[:, :, :3] * 255).astype(np.uint8), 0)
+			# clean_bgr = cv2.cvtColor(clean, cv2.COLOR_RGB2BGR)
+			# cv2.imwrite(filename, clean_bgr)
+
+			
+			# 1. Wipe out any old data in the cache
+			op('cache1').par.reset.pulse() 
+			
+			# 2. Trigger the 5-second capture window
+			op('timer1').par.start.pulse()
+
 			_last_capture_time = now
 			_stable_count = 0
 			_armed = False
-			print(f"[gesture] detected '{label}' (dist={dist:.3f}) -> saved {filename}")
+			# print(f"[gesture] detected '{label}' (dist={dist:.3f}) -> saved {filename}")
+			print(f"[gesture] detected '{label}' (dist={dist:.3f})")
 
 	if not _library:
 		text, color = "library empty - capture samples first", (0, 0, 255)
