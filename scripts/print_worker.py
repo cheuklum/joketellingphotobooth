@@ -10,26 +10,12 @@ import win32print
 import time
 from PIL import Image, ImageWin
 
-def run_photobooth_sequence(printer_name):
+def run_photobooth_sequence(full_path, printer_name):
 	print("Text DAT sequence initiated...")
 	
 	# 1. Lock the cache
 	op('cache1').par.active = 0
 	
-	# 2. Build paths and save image
-	ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-	filename = f"pic_{ts}.jpg"
-	folder = os.path.join(project.folder, 'captures')
-	os.makedirs(folder, exist_ok=True)
-	full_path = os.path.normpath(os.path.join(folder, filename))
-	
-	op('final_image').save(full_path)
-	print(f"Saved artwork directly to: {full_path}")
-
-	if not os.path.exists(full_path):
-		print(f"Error: File not found at {full_path}")
-		return False
-
     # # This targets the native Windows Photo Printing wizard engine directly via command line,
     # # passing your specific printer name and bypassing the interactive prompt screens.
 	# cmd = f'rundll32.exe C:\\Windows\\System32\\shimgvw.dll,ImageView_PrintTo "{full_path}" "{printer_name}"'
@@ -42,7 +28,6 @@ def run_photobooth_sequence(printer_name):
 	# 	print(f"System Print Error: {e}")
 	# 	return False
 		
-
 	# Set up Windows Core Graphics (GDI) functions using ctypes
 	gdi32 = ctypes.WinDLL('gdi32', use_last_error=True)
 	user32 = ctypes.WinDLL('user32', use_last_error=True)
@@ -52,7 +37,6 @@ def run_photobooth_sequence(printer_name):
 	VERTRES = 10
 	PHYSICALWIDTH = 110
 	PHYSICALHEIGHT = 111
-
 
 	try:
 		# 1. Open the image natively in Python
