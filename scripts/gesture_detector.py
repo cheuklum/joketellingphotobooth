@@ -40,7 +40,7 @@ mp_drawing = mp.solutions.drawing_utils
 
 _hands = mp_hands.Hands(
 	static_image_mode=False,
-	max_num_hands=1,
+	max_num_hands=2,
 	min_detection_confidence=0.6,
 	min_tracking_confidence=0.6,
 )
@@ -125,6 +125,10 @@ def onSetupParameters(scriptOp):
 	p = page.appendToggle('Detectenable', label='Detect + Auto-Save')
 	p[0].default = True
 
+	# only trigger when two hands are visible and BOTH match a taught gesture
+	p = page.appendToggle('Requiretwohands', label='Require Two Hands')
+	p[0].default = False
+
 	# leave blank to save into <project folder>/captures (follows the .toe if you move it)
 	page.appendFolder('Savefolder', label='Save Folder')
 
@@ -192,16 +196,34 @@ def onCook(scriptOp):
 
 	results = _hands.process(rgb_for_mp)
 
-	vector = None
+	vectors = []
 	if results.multi_hand_landmarks:
-		hand_landmarks = results.multi_hand_landmarks[0]
-		vector = _landmarks_to_vector(hand_landmarks)
-		mp_drawing.draw_landmarks(rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+		for hand_landmarks in results.multi_hand_landmarks:
+			vectors.append(_landmarks_to_vector(hand_landmarks))
+			mp_drawing.draw_landmarks(rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
+	# teaching (Capture Sample) uses the first detected hand
+	vector = vectors[0] if vectors else None
 	scriptOp.store('lastVector', vector)
 
+	# detection checks every visible hand; per-hand nearest-neighbor results
 	threshold = scriptOp.par.Threshold.eval()
-	label, dist = _classify(vector, threshold)
+	require_two = scriptOp.par.Requiretwohands.eval()
+	label, dist = None, None
+	results_list = [r for r in (_classify(v, threshold) for v in vectors) if r[1] is not None]
+	matches = [r for r in results_list if r[0] is not None]
+
+	if require_two:
+		# trigger only when 2 hands are tracked and both match a taught gesture
+		if len(vectors) >= 2 and len(matches) >= 2:
+			names = sorted(m[0] for m in matches[:2])
+			label = names[0] if names[0] == names[1] else f"{names[0]}+{names[1]}"
+			dist = max(m[1] for m in matches[:2])
+		elif results_list:
+			dist = min(r[1] for r in results_list)
+	elif results_list:
+		# single-hand mode: a real match wins over a no-match; closest match wins
+		label, dist = min(matches or results_list, key=lambda r: r[1])
 
 	if scriptOp.par.Detectenable.eval():
 		global _armed, _gone_count
@@ -242,6 +264,11 @@ def onCook(scriptOp):
 		text, color = "library empty - capture samples first", (0, 0, 255)
 	elif vector is None:
 		text, color = "no hand detected", (0, 0, 255)
+	elif require_two and label is None:
+		text = f"hands: {len(vectors)}/2  matching: {len(matches)}/2"
+		if dist is not None:
+			text += f"  (best dist {dist:.2f})"
+		color = (0, 165, 255)
 	elif label is not None and not _armed:
 		text, color = f"{label} - photo taken, remove hand to re-arm", (255, 200, 0)
 	elif label is not None:
