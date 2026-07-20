@@ -4,6 +4,7 @@ import datetime
 import subprocess
 import random
 import re  
+import textwrap
 PRINTER_NAME = "Munbyn RW403B-N(Bluetooth)" 
 TEXT_FILE_PATH = os.path.normpath(os.path.join(project.folder, 'text.txt'))
 
@@ -39,6 +40,10 @@ def update_random_phrase():
             phrases = [line.strip() for line in f.readlines() if line.strip()]
             if phrases:
                 random_phrase = re.sub(r'^\s*\d+[.)]\s*', '', random.choice(phrases))
+
+    # wrap so no line runs longer than the date line - keeps the auto-fitting
+    # Text TOP from shrinking the type on long snippets
+    random_phrase = '\n'.join(textwrap.wrap(random_phrase, width=len(ts))) or random_phrase
 
     op('base1').par.Activetext = f"{ts}\n{random_phrase}"
 
