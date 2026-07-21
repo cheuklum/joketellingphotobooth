@@ -25,7 +25,6 @@ Setup (one time):
         import sys; print(sys.executable)
         <that python path> -m pip install mediapipe opencv-python
 """
-
 import json
 import os
 import time
@@ -40,7 +39,7 @@ mp_drawing = mp.solutions.drawing_utils
 
 _hands = mp_hands.Hands(
 	static_image_mode=False,
-	max_num_hands=2,
+	max_num_hands=1,
 	min_detection_confidence=0.6,
 	min_tracking_confidence=0.6,
 )
@@ -64,7 +63,7 @@ def _library_path():
 
 
 def _captures_dir(scriptOp):
-	folder = _par(scriptOp, 'Savefolder', '') or os.path.join(project.folder, 'captures')
+	folder = scriptOp.par.Savefolder.eval() or os.path.join(project.folder, 'captures')
 	os.makedirs(folder, exist_ok=True)
 	return folder
 
@@ -99,11 +98,6 @@ def _landmarks_to_vector(hand_landmarks):
 	return pts.flatten().tolist()
 
 
-def _par(scriptOp, name, default):
-	p = getattr(scriptOp.par, name, None)
-	return p.eval() if p is not None else default
-
-
 def _classify(vector, threshold):
 	if not _library or vector is None:
 		return None, None
@@ -130,10 +124,6 @@ def onSetupParameters(scriptOp):
 	p = page.appendToggle('Detectenable', label='Detect + Auto-Save')
 	p[0].default = True
 
-	# only trigger when two hands are visible and BOTH match a taught gesture
-	p = page.appendToggle('Requiretwohands', label='Require Two Hands')
-	p[0].default = False
-
 	# leave blank to save into <project folder>/captures (follows the .toe if you move it)
 	page.appendFolder('Savefolder', label='Save Folder')
 
@@ -157,7 +147,7 @@ def onPulse(par):
 
 	if par.name == 'Capturesample':
 		vector = scriptOp.fetch('lastVector', None)
-		label = str(_par(scriptOp, 'Gesturename', '')).strip()
+		label = scriptOp.par.Gesturename.eval().strip()
 		if vector is not None and label:
 			_library.append({'label': label, 'vector': vector})
 			_save_library()
@@ -183,7 +173,7 @@ def onCook(scriptOp):
 	if not _library_loaded:
 		_load_library()
 
-	input_top = scriptOp.inputs[0] if scriptOp.inputs else None
+	input_top = scriptOp.inputs[0]
 	if input_top is None:
 		scriptOp.copyNumpyArray(np.zeros((4, 4, 4), dtype=np.uint8))
 		return
@@ -201,36 +191,18 @@ def onCook(scriptOp):
 
 	results = _hands.process(rgb_for_mp)
 
-	vectors = []
+	vector = None
 	if results.multi_hand_landmarks:
-		for hand_landmarks in results.multi_hand_landmarks:
-			vectors.append(_landmarks_to_vector(hand_landmarks))
-			mp_drawing.draw_landmarks(rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+		hand_landmarks = results.multi_hand_landmarks[0]
+		vector = _landmarks_to_vector(hand_landmarks)
+		mp_drawing.draw_landmarks(rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-	# teaching (Capture Sample) uses the first detected hand
-	vector = vectors[0] if vectors else None
 	scriptOp.store('lastVector', vector)
 
-	# detection checks every visible hand; per-hand nearest-neighbor results
-	threshold = _par(scriptOp, 'Threshold', 0.65)
-	require_two = _par(scriptOp, 'Requiretwohands', False)
-	label, dist = None, None
-	results_list = [r for r in (_classify(v, threshold) for v in vectors) if r[1] is not None]
-	matches = [r for r in results_list if r[0] is not None]
+	threshold = scriptOp.par.Threshold.eval()
+	label, dist = _classify(vector, threshold)
 
-	if require_two:
-		# trigger only when 2 hands are tracked and both match a taught gesture
-		if len(vectors) >= 2 and len(matches) >= 2:
-			names = sorted(m[0] for m in matches[:2])
-			label = names[0] if names[0] == names[1] else f"{names[0]}+{names[1]}"
-			dist = max(m[1] for m in matches[:2])
-		elif results_list:
-			dist = min(r[1] for r in results_list)
-	elif results_list:
-		# single-hand mode: a real match wins over a no-match; closest match wins
-		label, dist = min(matches or results_list, key=lambda r: r[1])
-
-	if _par(scriptOp, 'Detectenable', True):
+	if scriptOp.par.Detectenable.eval():
 		global _armed, _gone_count
 		now = time.time()
 		if label is not None:
@@ -246,39 +218,39 @@ def onCook(scriptOp):
 		if (_armed
 				and label is not None
 				and _stable_count >= _STABLE_FRAMES_REQUIRED
-				and (now - _last_capture_time) >= _par(scriptOp, 'Cooldown', 1.5)):
-			folder = _captures_dir(scriptOp)
-			ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-			filename = os.path.join(folder, f"{label}_{ts}.jpg")
-			# if a second input is wired, save that (e.g. a stylized/composited feed);
-			# otherwise save the clean (un-annotated) camera frame
-			save_frame = frame
-			if len(scriptOp.inputs) > 1 and scriptOp.inputs[1] is not None:
-				alt = scriptOp.inputs[1].numpyArray(delayed=False)
-				if alt is not None:
-					save_frame = alt
-			clean = cv2.flip((save_frame[:, :, :3] * 255).astype(np.uint8), 0)
-			clean_bgr = cv2.cvtColor(clean, cv2.COLOR_RGB2BGR)
-			cv2.imwrite(filename, clean_bgr)
+				and (now - _last_capture_time) >= scriptOp.par.Cooldown.eval()):
+			
+			# folder = _captures_dir(scriptOp)
+			# ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+			# filename = os.path.join(folder, f"{label}_{ts}.jpg")
+			# # if a second input is wired, save that (e.g. a stylized/composited feed);
+			# # otherwise save the clean (un-annotated) camera frame
+			# save_frame = frame
+			# if len(scriptOp.inputs) > 1 and scriptOp.inputs[1] is not None:
+			# 	alt = scriptOp.inputs[1].numpyArray(delayed=False)
+			# 	if alt is not None:
+			# 		save_frame = alt
+			# clean = cv2.flip((save_frame[:, :, :3] * 255).astype(np.uint8), 0)
+			# clean_bgr = cv2.cvtColor(clean, cv2.COLOR_RGB2BGR)
+			# cv2.imwrite(filename, clean_bgr)
+
+			
+			# 1. Wipe out any old data in the cache
+			op('cache1').par.reset.pulse() 
+			
+			# 2. Trigger the 5-second capture window
+			op('timer1').par.start.pulse()
+
 			_last_capture_time = now
 			_stable_count = 0
 			_armed = False
-			print(f"[gesture] detected '{label}' (dist={dist:.3f}) -> saved {filename}")
-			# kick off the photobooth sequence (timer -> joke pick -> save/print)
-			t = op('timer1')
-			if t is not None:
-				t.par.start.pulse()
-				print("[gesture] timer1 started")
+			# print(f"[gesture] detected '{label}' (dist={dist:.3f}) -> saved {filename}")
+			print(f"[gesture] detected '{label}' (dist={dist:.3f})")
 
 	if not _library:
 		text, color = "library empty - capture samples first", (0, 0, 255)
 	elif vector is None:
 		text, color = "no hand detected", (0, 0, 255)
-	elif require_two and label is None:
-		text = f"hands: {len(vectors)}/2  matching: {len(matches)}/2"
-		if dist is not None:
-			text += f"  (best dist {dist:.2f})"
-		color = (0, 165, 255)
 	elif label is not None and not _armed:
 		text, color = f"{label} - photo taken, remove hand to re-arm", (255, 200, 0)
 	elif label is not None:
