@@ -6,13 +6,20 @@ import random
 PRINTER_NAME = "Munbyn RW403B-N(Bluetooth)" 
 TEXT_FILE_PATH = os.path.normpath(os.path.join(project.folder, 'text.txt'))
 
-def onValueChange(channel, sampleIndex, val, prev):
-    # While the timer is actively running, keep the cache active!
-    if channel.name == 'running':
-        op('cache1').par.active = int(val)
-        print("START CACHE!")
-    return
+# def onValueChange(channel, sampleIndex, val, prev):
+#     # While the timer is actively running, keep the cache active!
+#     if channel.name == 'running':
+#         op('cache1').par.active = int(val)
+#         print("START CACHE!")
+#     return
     
+def onOffToOn(channel, sampleIndex, val, prev):
+    # While the timer is actively running, keep the cache active!
+    if channel.name == 'ready_pulse':
+        op('cache1').par.active = int(val)
+        print("START CACHE NOW!")
+    return
+
 def onOnToOff(channel, sampleIndex, val, prev):
     if channel.name == 'done_pulse':
         should_print = op('button_enable_print').panel.state

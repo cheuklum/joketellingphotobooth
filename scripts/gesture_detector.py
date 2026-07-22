@@ -39,7 +39,7 @@ mp_drawing = mp.solutions.drawing_utils
 
 _hands = mp_hands.Hands(
 	static_image_mode=False,
-	max_num_hands=1,
+	max_num_hands=2,
 	min_detection_confidence=0.6,
 	min_tracking_confidence=0.6,
 )
@@ -193,12 +193,18 @@ def onCook(scriptOp):
 
 	vector = None
 	if results.multi_hand_landmarks:
-		hand_landmarks = results.multi_hand_landmarks[0]
-		vector = _landmarks_to_vector(hand_landmarks)
-		mp_drawing.draw_landmarks(rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+		for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
+					
+			# Draw all hands
+			mp_drawing.draw_landmarks(rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+			detected_side = handedness.classification[0].label
+			if detected_side != "Right":
+				continue
+			else:
+				vector = _landmarks_to_vector(hand_landmarks)
 
 	scriptOp.store('lastVector', vector)
-
 	threshold = scriptOp.par.Threshold.eval()
 	label, dist = _classify(vector, threshold)
 
@@ -218,22 +224,8 @@ def onCook(scriptOp):
 		if (_armed
 				and label is not None
 				and _stable_count >= _STABLE_FRAMES_REQUIRED
-				and (now - _last_capture_time) >= scriptOp.par.Cooldown.eval()):
-			
-			# folder = _captures_dir(scriptOp)
-			# ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-			# filename = os.path.join(folder, f"{label}_{ts}.jpg")
-			# # if a second input is wired, save that (e.g. a stylized/composited feed);
-			# # otherwise save the clean (un-annotated) camera frame
-			# save_frame = frame
-			# if len(scriptOp.inputs) > 1 and scriptOp.inputs[1] is not None:
-			# 	alt = scriptOp.inputs[1].numpyArray(delayed=False)
-			# 	if alt is not None:
-			# 		save_frame = alt
-			# clean = cv2.flip((save_frame[:, :, :3] * 255).astype(np.uint8), 0)
-			# clean_bgr = cv2.cvtColor(clean, cv2.COLOR_RGB2BGR)
-			# cv2.imwrite(filename, clean_bgr)
-
+				and (now - _last_capture_time) >= scriptOp.par.Cooldown.eval()
+				and not op('timer1')['running'].eval()):
 			
 			# 1. Wipe out any old data in the cache
 			op('cache1').par.reset.pulse() 
