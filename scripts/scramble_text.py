@@ -122,6 +122,10 @@ def onFrameStart(frame):
 		_begin(text, now)
 		_anim['begun_at'] = nowsec
 
+	# publish attract state so the network can show/hide attract-only elements
+	# (read it in an expression with: op('base1').fetch('attract', 0))
+	source_op.store('attract', 1.0 if text == ATTRACT_TEXT else 0.0)
+
 	target = _anim['target']
 	if not target:
 		return
