@@ -22,7 +22,7 @@ TARGET_OP = 'joketext'     # Text TOP that displays the animation
 TARGET_WIDTH_FRAC = 0.60   # widest text line is scaled to this fraction of the TOP width
 
 # attract / idle behavior
-ATTRACT_TEXT = 'do you want to hear a joke?'
+ATTRACT_TEXT = 'raise your hand 4 a joke'
 REPLAY_SECONDS = 60.0        # re-run the scramble on the attract phrase this often
 IDLE_RESET_SECONDS = 20.0    # after a joke has been on screen this long, return to attract
 TIMER_OP = 'timer1'          # countdown timer; no attract reset while it runs
