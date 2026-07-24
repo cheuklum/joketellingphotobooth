@@ -16,10 +16,12 @@ Tuning knobs are the constants below; frame counts assume 60fps timeline.
 """
 
 import random
+import textwrap
 
 SOURCE_OP = 'base1'        # component holding the Activetext custom parameter
 TARGET_OP = 'joketext'     # Text TOP that displays the animation
 TARGET_WIDTH_FRAC = 0.60   # widest text line is scaled to this fraction of the TOP width
+WRAP_WIDTH = 22            # max characters per line; longer joke lines wrap instead of shrinking
 
 # attract / idle behavior
 ATTRACT_TEXT = 'raise your hand 4 a joke'
@@ -33,6 +35,19 @@ STAGGER = 1.4        # frames of delay added per character index (the l->r sweep
 START_JITTER = 8     # random extra frames before a character starts scrambling
 RESOLVE_AFTER = 16   # frames a character scrambles before locking in
 RESOLVE_JITTER = 10  # random extra scramble frames per character
+
+def _wrap(s):
+	"""Wrap long lines to WRAP_WIDTH chars (at word boundaries), preserving any
+	existing newlines - e.g. keeps the timestamp line, wraps the joke line. This
+	makes long jokes break onto more lines instead of shrinking the font."""
+	out = []
+	for line in s.split('\n'):
+		if len(line) <= WRAP_WIDTH:
+			out.append(line)
+		else:
+			out.extend(textwrap.wrap(line, WRAP_WIDTH) or [line])
+	return '\n'.join(out)
+
 
 _anim = {
 	'target': None,    # text currently being revealed
@@ -108,8 +123,12 @@ def onFrameStart(frame):
 		except Exception:
 			timer_running = False
 
-	if text != _anim['target']:
-		_begin(text, now)
+	# 'text' stays raw for the attract-state logic; 'display' is what we animate,
+	# wrapped so long jokes break onto more lines instead of shrinking the font
+	display = _wrap(text)
+
+	if display != _anim['target']:
+		_begin(display, now)
 		_anim['changed_at'] = nowsec
 		_anim['begun_at'] = nowsec
 	elif (text != ATTRACT_TEXT and not timer_running
@@ -119,8 +138,12 @@ def onFrameStart(frame):
 		return
 	elif text == ATTRACT_TEXT and nowsec - _anim['begun_at'] > REPLAY_SECONDS:
 		# periodically re-run the scramble so the idle screen stays alive
-		_begin(text, now)
+		_begin(display, now)
 		_anim['begun_at'] = nowsec
+
+	# publish attract state so the network can show/hide attract-only elements
+	# (read it in an expression with: op('base1').fetch('attract', 0))
+	source_op.store('attract', 1.0 if text == ATTRACT_TEXT else 0.0)
 
 	target = _anim['target']
 	if not target:
