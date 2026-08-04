@@ -3,8 +3,11 @@ import glob
 import datetime
 import subprocess
 import random
+import textwrap
+
 PRINTER_NAME = "Munbyn RW403B-N(Bluetooth)" 
 TEXT_FILE_PATH = os.path.normpath(os.path.join(project.folder, 'text.txt'))
+WRAP_WIDTH = 35            # max characters per line; longer joke lines wrap instead of shrinking
 
 # def onValueChange(channel, sampleIndex, val, prev):
 #     # While the timer is actively running, keep the cache active!
@@ -45,9 +48,28 @@ def update_random_phrase():
             phrases = [line.strip() for line in f.readlines() if line.strip()]
             if phrases:
                 random_phrase = random.choice(phrases)
-                
+
+    # 1. Combine timestamp and random phrase with a newline
+    combined_text = f'{ts}\n{random_phrase}'
+
+    # 2. Perform line wrapping on the combined string
+    final_text = _wrap(combined_text)
+
     # Instead of finding a DAT, just store it directly on the parent component!
-    op('base1').par.Activetext = f"{ts}\n{random_phrase}"
+    op('base1').par.Activetext = final_text
+
+
+def _wrap(s):
+	"""Wrap long lines to WRAP_WIDTH chars (at word boundaries), preserving any
+	existing newlines - e.g. keeps the timestamp line, wraps the joke line. This
+	makes long jokes break onto more lines instead of shrinking the font."""
+	out = []
+	for line in s.split('\n'):
+		if len(line) <= WRAP_WIDTH:
+			out.append(line)
+		else:
+			out.extend(textwrap.wrap(line, WRAP_WIDTH) or [line])
+	return '\n'.join(out)
 
 def save_photo():
 # 2. Build paths and save image

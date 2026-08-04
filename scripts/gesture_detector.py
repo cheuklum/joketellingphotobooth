@@ -199,10 +199,11 @@ def onCook(scriptOp):
 			mp_drawing.draw_landmarks(rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
 			detected_side = handedness.classification[0].label
-			if detected_side != "Right":
-				continue
-			else:
-				vector = _landmarks_to_vector(hand_landmarks)
+			vector = _landmarks_to_vector(hand_landmarks)
+			# if detected_side != "Right":
+			# 	continue
+			# else:
+			# 	vector = _landmarks_to_vector(hand_landmarks)
 
 	scriptOp.store('lastVector', vector)
 	threshold = scriptOp.par.Threshold.eval()

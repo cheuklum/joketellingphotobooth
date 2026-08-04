@@ -24,7 +24,7 @@ TARGET_WIDTH_FRAC = 0.60   # widest text line is scaled to this fraction of the 
 WRAP_WIDTH = 22            # max characters per line; longer joke lines wrap instead of shrinking
 
 # attract / idle behavior
-ATTRACT_TEXT = 'raise your hand 4 a joke'
+ATTRACT_TEXT = 'raise your hand 4 a photo'
 REPLAY_SECONDS = 60.0        # re-run the scramble on the attract phrase this often
 IDLE_RESET_SECONDS = 20.0    # after a joke has been on screen this long, return to attract
 TIMER_OP = 'timer1'          # countdown timer; no attract reset while it runs
