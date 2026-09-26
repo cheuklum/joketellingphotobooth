@@ -26,7 +26,9 @@ _state = {'value': None, 'started': -1e9, 'scramble': '', 'last_roll': -1}
 
 
 def onFrameStart(frame):
-	t = op(TIMER_OP)
+	# prefer the project-level timer (the one the gesture/photo sequence pulses),
+	# not a same-named timer that happens to sit inside this base
+	t = op('/project1/' + TIMER_OP) or op(TIMER_OP)
 	c = op(TARGET_OP)
 	if t is None or c is None:
 		return
