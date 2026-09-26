@@ -7,7 +7,7 @@ import textwrap
 
 # PRINTER_NAME = "Munbyn RW403B-N(Bluetooth)" 
 PRINTER_NAME = "Munbyn RW403B-N" 
-TEXT_FILE_PATH = os.path.normpath(os.path.join(project.folder, 'text.txt'))
+TEXT_FILE_PATH = os.path.normpath(os.path.join(project.folder, 'tracklist.txt'))
 WRAP_WIDTH = 35            # max characters per line; longer joke lines wrap instead of shrinking
 
 # def onValueChange(channel, sampleIndex, val, prev):
