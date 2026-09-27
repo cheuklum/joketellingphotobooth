@@ -39,7 +39,7 @@ mp_drawing = mp.solutions.drawing_utils
 
 _hands = mp_hands.Hands(
 	static_image_mode=False,
-	max_num_hands=2,
+	max_num_hands=8,
 	min_detection_confidence=0.6,
 	min_tracking_confidence=0.6,
 )
@@ -102,9 +102,12 @@ def _classify(vector, threshold):
 	if not _library or vector is None:
 		return None, None
 	v = np.array(vector)
+	# also try the x-mirrored hand so a gesture taught with one hand matches the other
+	v_mirror = (v.reshape(21, 3) * np.array([-1.0, 1.0, 1.0])).flatten()
 	best_label, best_dist = None, float('inf')
 	for sample in _library:
-		d = float(np.linalg.norm(v - np.array(sample['vector'])))
+		s = np.array(sample['vector'])
+		d = float(min(np.linalg.norm(v - s), np.linalg.norm(v_mirror - s)))
 		if d < best_dist:
 			best_dist = d
 			best_label = sample['label']
@@ -191,23 +194,47 @@ def onCook(scriptOp):
 
 	results = _hands.process(rgb_for_mp)
 
-	vector = None
+	threshold = scriptOp.par.Threshold.eval()
+
+	# Classify EVERY hand independently, then act on the best match of any hand.
+	vector = None          # vector of the hand we report on (best match, else largest hand)
+	label, dist = None, None
+	best_any_dist = None   # closest non-matching distance, for the on-screen message
+	capture_vector, capture_size = None, -1.0
+	h, w = rgb.shape[:2]
+
 	if results.multi_hand_landmarks:
-		for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
-					
-			# Draw all hands
+		for hand_landmarks in results.multi_hand_landmarks:
 			mp_drawing.draw_landmarks(rgb, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-			detected_side = handedness.classification[0].label
-			vector = _landmarks_to_vector(hand_landmarks)
-			# if detected_side != "Right":
-			# 	continue
-			# else:
-			# 	vector = _landmarks_to_vector(hand_landmarks)
+			v = _landmarks_to_vector(hand_landmarks)
+			hand_label, hand_dist = _classify(v, threshold)
 
-	scriptOp.store('lastVector', vector)
-	threshold = scriptOp.par.Threshold.eval()
-	label, dist = _classify(vector, threshold)
+			# label each hand at its wrist so you can see what every hand is doing
+			wx, wy = int(hand_landmarks.landmark[0].x * w), int(hand_landmarks.landmark[0].y * h)
+			tag = f"{hand_label} {hand_dist:.2f}" if hand_label else (f"{hand_dist:.2f}" if hand_dist is not None else "")
+			cv2.putText(rgb, tag, (wx, min(h - 5, wy + 25)), cv2.FONT_HERSHEY_SIMPLEX,
+						0.6, (0, 255, 0) if hand_label else (0, 165, 255), 2)
+
+			# Capture Sample uses the biggest (closest) hand, so it's predictable with a crowd
+			xs = [lm.x for lm in hand_landmarks.landmark]
+			ys = [lm.y for lm in hand_landmarks.landmark]
+			size = (max(xs) - min(xs)) * (max(ys) - min(ys))
+			if size > capture_size:
+				capture_size, capture_vector = size, v
+
+			if hand_label is not None:
+				if label is None or hand_dist < dist:
+					label, dist, vector = hand_label, hand_dist, v
+			elif hand_dist is not None and (best_any_dist is None or hand_dist < best_any_dist):
+				best_any_dist = hand_dist
+
+		if vector is None:
+			vector = capture_vector
+		if label is None:
+			dist = best_any_dist
+
+	scriptOp.store('lastVector', capture_vector)
 
 	if scriptOp.par.Detectenable.eval():
 		global _armed, _gone_count
