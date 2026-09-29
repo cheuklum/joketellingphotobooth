@@ -36,6 +36,19 @@ START_JITTER = 8     # random extra frames before a character starts scrambling
 RESOLVE_AFTER = 16   # frames a character scrambles before locking in
 RESOLVE_JITTER = 10  # random extra scramble frames per character
 
+CORE_PATH = '/project1'   # where base1/timer1 live; used as a fallback lookup
+
+
+def _find(name):
+	"""Resolve an operator whether this DAT lives at /project1 or nested inside a
+	base. Tries a sibling/relative lookup first (finds moved targets like joketext),
+	then falls back to the core path (finds base1/timer1 that stay in /project1)."""
+	o = op(name)
+	if o is None and not name.startswith('/'):
+		o = op(CORE_PATH + '/' + name)
+	return o
+
+
 def _wrap(s):
 	"""Wrap long lines to WRAP_WIDTH chars (at word boundaries), preserving any
 	existing newlines - e.g. keeps the timestamp line, wraps the joke line. This
